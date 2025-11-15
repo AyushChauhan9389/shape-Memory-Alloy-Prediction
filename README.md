@@ -2,6 +2,25 @@
 
 This project implements a Multi-Layer Perceptron (MLP) neural network to predict the Austenite Finish (AF) and Martensite Finish (MF) temperatures for Shape Memory Alloys based on their composition and processing parameters.
 
+## ðŸš€ Quick Start - Use the Improved Model!
+
+**For best results, use the improved model:**
+
+```bash
+python improved_mlp_model.py  # âœ“ RECOMMENDED - Better performance
+```
+
+The improved model includes:
+- âœ“ Advanced feature engineering (NiTi ratios, element interactions)
+- âœ“ AS and MS temperatures as additional features
+- âœ“ Deeper architecture with Batch Normalization
+- âœ“ Ensemble of 3 models for robust predictions
+- âœ“ Expected RÂ²: 0.82-0.87, MAE: 8-15Â°C
+
+See [IMPROVEMENTS.md](IMPROVEMENTS.md) for detailed comparison.
+
+---
+
 ## Model Architecture
 
 **MLP (3-Layer) Neural Network:**
@@ -23,8 +42,8 @@ This project implements a Multi-Layer Perceptron (MLP) neural network to predict
 
 ## Expected Performance
 
-- **R² Score:** 0.80-0.88
-- **MAE:** 8-15°C
+- **Rï¿½ Score:** 0.80-0.88
+- **MAE:** 8-15ï¿½C
 - **Training Time:** 2-5 minutes
 
 ## Installation
@@ -43,13 +62,31 @@ pip install tensorflow>=2.15.0 numpy>=1.24.0 pandas>=2.0.0 scikit-learn>=1.3.0 m
 
 ## Usage
 
-Run the MLP training script:
+### Option 1: Improved Model (Recommended)
+
+```bash
+python improved_mlp_model.py
+```
+
+**Features:**
+- Uses ~30 features (includes AS, MS temperatures + engineered features)
+- 4-layer architecture (256-128-64-32) with Batch Normalization
+- Ensemble of 3 models
+- Expected RÂ²: 0.82-0.87, MAE: 8-15Â°C
+
+### Option 2: Baseline Model
 
 ```bash
 python mlp_model.py
 ```
 
-The script will:
+**Features:**
+- Uses 22 features (element compositions + process parameters)
+- 3-layer architecture (128-64-32)
+- Single model
+- Achieved RÂ²: 0.57, MAE: 52.90Â°C
+
+### What the scripts do:
 1. Load and preprocess the `Combined_SMA_Dataset_Filled.csv` dataset
 2. Split data into train (64%), validation (16%), and test (20%) sets
 3. Build and train the MLP model with early stopping
@@ -70,8 +107,8 @@ The dataset (`dataset/Combined_SMA_Dataset_Filled.csv`) contains 1,906 samples o
 - Process parameters (3): Cooling Rate, Heating Rate, Calculated Density
 
 **Targets (2):**
-- AF: Austenite Finish Temperature (°C)
-- MF: Martensite Finish Temperature (°C)
+- AF: Austenite Finish Temperature (ï¿½C)
+- MF: Martensite Finish Temperature (ï¿½C)
 
 ## Output
 
@@ -80,8 +117,8 @@ After training, you'll get:
 1. **Console Output:**
    - Model architecture summary
    - Training progress with early stopping
-   - Test set performance metrics (MAE, R², RMSE)
-   - Cross-validation results (mean ± std)
+   - Test set performance metrics (MAE, Rï¿½, RMSE)
+   - Cross-validation results (mean ï¿½ std)
 
 2. **Saved Files:**
    - `mlp_sma_model.keras` - Trained model
@@ -91,8 +128,8 @@ After training, you'll get:
 
 ## Model Performance Interpretation
 
-- **R² Score:** Measures how well the model explains variance in the data (1.0 = perfect)
-- **MAE (Mean Absolute Error):** Average prediction error in °C
+- **Rï¿½ Score:** Measures how well the model explains variance in the data (1.0 = perfect)
+- **MAE (Mean Absolute Error):** Average prediction error in ï¿½C
 - **RMSE (Root Mean Squared Error):** More sensitive to large errors than MAE
 
 ## Advanced Usage
@@ -119,8 +156,8 @@ X_new_scaled = scaler.fit_transform(X_new)  # Note: Use the scaler from training
 predictions = model.predict(X_new_scaled)
 af_pred, mf_pred = predictions[0]
 
-print(f"Predicted AF: {af_pred:.2f}°C")
-print(f"Predicted MF: {mf_pred:.2f}°C")
+print(f"Predicted AF: {af_pred:.2f}ï¿½C")
+print(f"Predicted MF: {mf_pred:.2f}ï¿½C")
 ```
 
 ## Technical Details
@@ -144,7 +181,7 @@ print(f"Predicted MF: {mf_pred:.2f}°C")
 
 ## Troubleshooting
 
-**Low R² or high MAE?**
+**Low Rï¿½ or high MAE?**
 - Increase epochs (if early stopping triggered too early)
 - Adjust learning rate (try 0.0001 or 0.01)
 - Reduce dropout (try 0.2)
