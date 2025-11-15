@@ -5,7 +5,7 @@ Predicts Austenite Finish (AF) and Martensite Finish (MF) temperatures
 
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import xgboost as xgb
@@ -26,11 +26,14 @@ class SMAXGBoostModel:
     XGBoost-based predictor for Shape Memory Alloy transformation temperatures
     """
 
-    def __init__(self):
+    def __init__(self, use_tuning=True):
         self.model_af = None
         self.model_mf = None
         self.scaler = StandardScaler()
         self.feature_columns = None
+        self.use_tuning = use_tuning
+        self.best_params_af = None
+        self.best_params_mf = None
 
     def load_data(self, filepath):
         """Load and prepare the SMA dataset"""
@@ -112,7 +115,7 @@ class SMAXGBoostModel:
         Using separate models allows independent optimization
         """
         print("\n" + "="*60)
-        print("TRAINING XGBOOST MODELS")
+        print("TRAINING XGBOOST MODELS WITH OPTIMIZATION")
         print("="*60)
 
         # Split data
@@ -127,83 +130,178 @@ class SMAXGBoostModel:
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
 
-        # XGBoost parameters - optimized for tabular data
-        xgb_params = {
-            'n_estimators': 500,
-            'max_depth': 6,
-            'learning_rate': 0.05,
-            'min_child_weight': 3,
-            'subsample': 0.8,
-            'colsample_bytree': 0.8,
-            'gamma': 0.1,
-            'reg_alpha': 0.1,  # L1 regularization
-            'reg_lambda': 1.0,  # L2 regularization
+        # Improved base parameters - REDUCED OVERFITTING
+        base_params = {
             'random_state': 42,
             'n_jobs': -1,
-            'early_stopping_rounds': 50,
             'eval_metric': 'rmse'
         }
+
+        # Better default parameters to reduce overfitting
+        improved_params = {
+            'n_estimators': 300,          # Reduced from 500
+            'max_depth': 4,                # Reduced from 6 (prevents overfitting)
+            'learning_rate': 0.01,         # Reduced from 0.05 (slower, more stable)
+            'min_child_weight': 5,         # Increased from 3 (more conservative)
+            'subsample': 0.7,              # Reduced from 0.8
+            'colsample_bytree': 0.7,       # Reduced from 0.8
+            'gamma': 0.2,                  # Increased from 0.1 (more pruning)
+            'reg_alpha': 1.0,              # Increased L1 from 0.1
+            'reg_lambda': 10.0,            # Increased L2 from 1.0
+            **base_params
+        }
+
+        if self.use_tuning:
+            # Hyperparameter tuning grid
+            param_grid = {
+                'n_estimators': [200, 300, 500],
+                'max_depth': [3, 4, 5],
+                'learning_rate': [0.01, 0.05, 0.1],
+                'min_child_weight': [3, 5, 7],
+                'subsample': [0.6, 0.7, 0.8],
+                'colsample_bytree': [0.6, 0.7, 0.8],
+                'gamma': [0.1, 0.2, 0.5],
+                'reg_alpha': [0.1, 1.0, 5.0],
+                'reg_lambda': [1.0, 5.0, 10.0]
+            }
+
+            xgb_params = improved_params
+        else:
+            xgb_params = improved_params
 
         # Train model for AF (Austenite Finish)
         print("\n" + "-"*60)
         print("Training XGBoost for AF (Austenite Finish Temperature)")
         print("-"*60)
-        self.model_af = xgb.XGBRegressor(**xgb_params)
 
-        # Training with progress simulation
-        with tqdm(total=100, desc="Training AF Model", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
-            # Start training in background
-            import threading
+        if self.use_tuning:
+            print("⚙️  Running GridSearchCV for hyperparameter tuning...")
+            print(f"   Testing {3*3*3*3*3*3*3*3*3} parameter combinations with 3-fold CV")
 
-            def train_af():
-                self.model_af.fit(
-                    X_train_scaled, y_af_train,
-                    eval_set=[(X_test_scaled, y_af_test)],
-                    verbose=False
-                )
+            grid_search_af = GridSearchCV(
+                estimator=xgb.XGBRegressor(**base_params),
+                param_grid=param_grid,
+                cv=3,
+                scoring='r2',
+                n_jobs=-1,
+                verbose=1
+            )
 
-            train_thread = threading.Thread(target=train_af)
-            train_thread.start()
+            with tqdm(total=100, desc="GridSearch AF", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
+                import threading
 
-            # Simulate progress
-            while train_thread.is_alive():
-                if pbar.n < 95:
-                    pbar.update(5)
-                time.sleep(0.5)
+                def tune_af():
+                    grid_search_af.fit(X_train_scaled, y_af_train)
 
-            train_thread.join()
-            pbar.update(100 - pbar.n)  # Complete to 100%
+                tune_thread = threading.Thread(target=tune_af)
+                tune_thread.start()
 
-        print("✓ AF model training completed")
+                while tune_thread.is_alive():
+                    if pbar.n < 95:
+                        pbar.update(5)
+                    time.sleep(2)
+
+                tune_thread.join()
+                pbar.update(100 - pbar.n)
+
+            self.model_af = grid_search_af.best_estimator_
+            self.best_params_af = grid_search_af.best_params_
+            print(f"✓ Best AF parameters found:")
+            for param, value in self.best_params_af.items():
+                print(f"   {param}: {value}")
+            print(f"✓ Best CV R² score: {grid_search_af.best_score_:.4f}")
+        else:
+            self.model_af = xgb.XGBRegressor(**xgb_params)
+
+            with tqdm(total=100, desc="Training AF Model", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
+                import threading
+
+                def train_af():
+                    self.model_af.fit(
+                        X_train_scaled, y_af_train,
+                        eval_set=[(X_test_scaled, y_af_test)],
+                        verbose=False
+                    )
+
+                train_thread = threading.Thread(target=train_af)
+                train_thread.start()
+
+                while train_thread.is_alive():
+                    if pbar.n < 95:
+                        pbar.update(5)
+                    time.sleep(0.5)
+
+                train_thread.join()
+                pbar.update(100 - pbar.n)
+
+            print("✓ AF model training completed")
 
         # Train model for MF (Martensite Finish)
         print("\n" + "-"*60)
         print("Training XGBoost for MF (Martensite Finish Temperature)")
         print("-"*60)
-        self.model_mf = xgb.XGBRegressor(**xgb_params)
 
-        # Training with progress simulation
-        with tqdm(total=100, desc="Training MF Model", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
-            def train_mf():
-                self.model_mf.fit(
-                    X_train_scaled, y_mf_train,
-                    eval_set=[(X_test_scaled, y_mf_test)],
-                    verbose=False
-                )
+        if self.use_tuning:
+            print("⚙️  Running GridSearchCV for hyperparameter tuning...")
+            print(f"   Testing {3*3*3*3*3*3*3*3*3} parameter combinations with 3-fold CV")
 
-            train_thread = threading.Thread(target=train_mf)
-            train_thread.start()
+            grid_search_mf = GridSearchCV(
+                estimator=xgb.XGBRegressor(**base_params),
+                param_grid=param_grid,
+                cv=3,
+                scoring='r2',
+                n_jobs=-1,
+                verbose=1
+            )
 
-            # Simulate progress
-            while train_thread.is_alive():
-                if pbar.n < 95:
-                    pbar.update(5)
-                time.sleep(0.5)
+            with tqdm(total=100, desc="GridSearch MF", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
+                import threading
 
-            train_thread.join()
-            pbar.update(100 - pbar.n)  # Complete to 100%
+                def tune_mf():
+                    grid_search_mf.fit(X_train_scaled, y_mf_train)
 
-        print("✓ MF model training completed")
+                tune_thread = threading.Thread(target=tune_mf)
+                tune_thread.start()
+
+                while tune_thread.is_alive():
+                    if pbar.n < 95:
+                        pbar.update(5)
+                    time.sleep(2)
+
+                tune_thread.join()
+                pbar.update(100 - pbar.n)
+
+            self.model_mf = grid_search_mf.best_estimator_
+            self.best_params_mf = grid_search_mf.best_params_
+            print(f"✓ Best MF parameters found:")
+            for param, value in self.best_params_mf.items():
+                print(f"   {param}: {value}")
+            print(f"✓ Best CV R² score: {grid_search_mf.best_score_:.4f}")
+        else:
+            self.model_mf = xgb.XGBRegressor(**xgb_params)
+
+            with tqdm(total=100, desc="Training MF Model", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
+                import threading
+
+                def train_mf():
+                    self.model_mf.fit(
+                        X_train_scaled, y_mf_train,
+                        eval_set=[(X_test_scaled, y_mf_test)],
+                        verbose=False
+                    )
+
+                train_thread = threading.Thread(target=train_mf)
+                train_thread.start()
+
+                while train_thread.is_alive():
+                    if pbar.n < 95:
+                        pbar.update(5)
+                    time.sleep(0.5)
+
+                train_thread.join()
+                pbar.update(100 - pbar.n)
+
+            print("✓ MF model training completed")
 
         return X_train_scaled, X_test_scaled, y_af_train, y_af_test, y_mf_train, y_mf_test
 
@@ -372,14 +470,18 @@ class SMAXGBoostModel:
         print("Models loaded successfully!")
 
 
-def main():
+def main(use_tuning=False):
     """Main execution function"""
     print("="*60)
     print("XGBOOST MODEL FOR SHAPE MEMORY ALLOY PREDICTION")
+    if use_tuning:
+        print("WITH HYPERPARAMETER TUNING (GridSearchCV)")
+    else:
+        print("WITH IMPROVED REGULARIZATION PARAMETERS")
     print("="*60)
 
     # Initialize model
-    sma_model = SMAXGBoostModel()
+    sma_model = SMAXGBoostModel(use_tuning=use_tuning)
 
     # Load data
     df = sma_model.load_data('dataset/Combined_SMA_Dataset_Filled.csv')
