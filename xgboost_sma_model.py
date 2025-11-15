@@ -13,6 +13,8 @@ from sklearn.multioutput import MultiOutputRegressor
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
+from tqdm import tqdm
+import time
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -33,9 +35,10 @@ class SMAXGBoostModel:
     def load_data(self, filepath):
         """Load and prepare the SMA dataset"""
         print(f"Loading data from {filepath}...")
-        df = pd.read_csv(filepath)
-        print(f"Dataset shape: {df.shape}")
-        print(f"\nColumns: {df.columns.tolist()}")
+        with tqdm(total=100, desc="Loading CSV", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}') as pbar:
+            df = pd.read_csv(filepath)
+            pbar.update(100)
+        print(f"✓ Dataset loaded successfully: {df.shape[0]} samples, {df.shape[1]} features")
         return df
 
     def prepare_features(self, df):
@@ -62,30 +65,32 @@ class SMAXGBoostModel:
             'Calculated Density (g/cm^3)'
         ]
 
-        # Note: Not using TSPAN as it's derived from AF-MF (target leakage)
-
         # Combine all features
         self.feature_columns = element_cols + additional_features
 
-        # Create feature matrix
-        X = df[self.feature_columns].copy()
+        # Create feature matrix with progress
+        with tqdm(total=5, desc="Feature Engineering", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}') as pbar:
+            X = df[self.feature_columns].copy()
+            pbar.update(1)
 
-        # Feature Engineering: Create element ratios and interactions
-        # Ni/Ti ratio (important for NiTi alloys)
-        X['Ni_Ti_ratio'] = X['Ni (at.%)'] / (X['Ti (at.%)'] + 1e-6)
+            # Ni/Ti ratio (important for NiTi alloys)
+            X['Ni_Ti_ratio'] = X['Ni (at.%)'] / (X['Ti (at.%)'] + 1e-6)
+            pbar.update(1)
 
-        # Total alloying elements (excluding Ni and Ti)
-        alloying_elements = [col for col in element_cols if col not in ['Ni (at.%)', 'Ti (at.%)']]
-        X['Total_Alloying'] = X[alloying_elements].sum(axis=1)
+            # Total alloying elements (excluding Ni and Ti)
+            alloying_elements = [col for col in element_cols if col not in ['Ni (at.%)', 'Ti (at.%)']]
+            X['Total_Alloying'] = X[alloying_elements].sum(axis=1)
+            pbar.update(1)
 
-        # Ni * Ti interaction
-        X['Ni_Ti_interaction'] = X['Ni (at.%)'] * X['Ti (at.%)']
+            # Ni * Ti interaction
+            X['Ni_Ti_interaction'] = X['Ni (at.%)'] * X['Ti (at.%)']
+            pbar.update(1)
 
-        # Rate ratio
-        X['Cooling_Heating_ratio'] = X['Cooling Rate (°C/min)'] / (X['Heating Rate (°C/min)'] + 1e-6)
+            # Rate ratio
+            X['Cooling_Heating_ratio'] = X['Cooling Rate (°C/min)'] / (X['Heating Rate (°C/min)'] + 1e-6)
+            pbar.update(1)
 
-        print(f"Feature matrix shape: {X.shape}")
-        print(f"Number of features: {X.shape[1]}")
+        print(f"✓ Features ready: {X.shape[1]} total features (24 base + 4 engineered)")
 
         return X
 
@@ -144,23 +149,61 @@ class SMAXGBoostModel:
         print("Training XGBoost for AF (Austenite Finish Temperature)")
         print("-"*60)
         self.model_af = xgb.XGBRegressor(**xgb_params)
-        self.model_af.fit(
-            X_train_scaled, y_af_train,
-            eval_set=[(X_test_scaled, y_af_test)],
-            verbose=False
-        )
+
+        # Training with progress simulation
+        with tqdm(total=100, desc="Training AF Model", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
+            # Start training in background
+            import threading
+
+            def train_af():
+                self.model_af.fit(
+                    X_train_scaled, y_af_train,
+                    eval_set=[(X_test_scaled, y_af_test)],
+                    verbose=False
+                )
+
+            train_thread = threading.Thread(target=train_af)
+            train_thread.start()
+
+            # Simulate progress
+            while train_thread.is_alive():
+                if pbar.n < 95:
+                    pbar.update(5)
+                time.sleep(0.5)
+
+            train_thread.join()
+            pbar.update(100 - pbar.n)  # Complete to 100%
+
+        print("✓ AF model training completed")
 
         # Train model for MF (Martensite Finish)
-        print("\nTraining XGBoost for MF (Martensite Finish Temperature)")
+        print("\n" + "-"*60)
+        print("Training XGBoost for MF (Martensite Finish Temperature)")
         print("-"*60)
         self.model_mf = xgb.XGBRegressor(**xgb_params)
-        self.model_mf.fit(
-            X_train_scaled, y_mf_train,
-            eval_set=[(X_test_scaled, y_mf_test)],
-            verbose=False
-        )
 
-        print("\nTraining completed!")
+        # Training with progress simulation
+        with tqdm(total=100, desc="Training MF Model", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
+            def train_mf():
+                self.model_mf.fit(
+                    X_train_scaled, y_mf_train,
+                    eval_set=[(X_test_scaled, y_mf_test)],
+                    verbose=False
+                )
+
+            train_thread = threading.Thread(target=train_mf)
+            train_thread.start()
+
+            # Simulate progress
+            while train_thread.is_alive():
+                if pbar.n < 95:
+                    pbar.update(5)
+                time.sleep(0.5)
+
+            train_thread.join()
+            pbar.update(100 - pbar.n)  # Complete to 100%
+
+        print("✓ MF model training completed")
 
         return X_train_scaled, X_test_scaled, y_af_train, y_af_test, y_mf_train, y_mf_test
 
@@ -170,11 +213,17 @@ class SMAXGBoostModel:
         print("MODEL EVALUATION")
         print("="*60)
 
-        # Predictions
-        y_af_train_pred = self.model_af.predict(X_train)
-        y_af_test_pred = self.model_af.predict(X_test)
-        y_mf_train_pred = self.model_mf.predict(X_train)
-        y_mf_test_pred = self.model_mf.predict(X_test)
+        # Predictions with progress bar
+        print("\nGenerating predictions...")
+        with tqdm(total=4, desc="Making Predictions", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}') as pbar:
+            y_af_train_pred = self.model_af.predict(X_train)
+            pbar.update(1)
+            y_af_test_pred = self.model_af.predict(X_test)
+            pbar.update(1)
+            y_mf_train_pred = self.model_mf.predict(X_train)
+            pbar.update(1)
+            y_mf_test_pred = self.model_mf.predict(X_test)
+            pbar.update(1)
 
         # AF Model Metrics
         print("\n" + "-"*60)
@@ -303,10 +352,14 @@ class SMAXGBoostModel:
         print("\n" + "="*60)
         print("SAVING MODELS")
         print("="*60)
-        joblib.dump(self.model_af, 'xgboost_af_model.pkl')
-        joblib.dump(self.model_mf, 'xgboost_mf_model.pkl')
-        joblib.dump(self.scaler, 'feature_scaler.pkl')
-        print("Models saved:")
+        with tqdm(total=3, desc="Saving Models", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}') as pbar:
+            joblib.dump(self.model_af, 'xgboost_af_model.pkl')
+            pbar.update(1)
+            joblib.dump(self.model_mf, 'xgboost_mf_model.pkl')
+            pbar.update(1)
+            joblib.dump(self.scaler, 'feature_scaler.pkl')
+            pbar.update(1)
+        print("✓ Models saved successfully:")
         print("  - xgboost_af_model.pkl")
         print("  - xgboost_mf_model.pkl")
         print("  - feature_scaler.pkl")
