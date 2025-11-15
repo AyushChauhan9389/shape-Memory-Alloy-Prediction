@@ -39,15 +39,30 @@ class SMAXGBoostModel:
     def _check_gpu_available(self):
         """Check if GPU is available for XGBoost"""
         try:
+            # First check if NVIDIA GPU exists
             import subprocess
             result = subprocess.run(['nvidia-smi'], capture_output=True, text=True, timeout=2)
-            gpu_available = result.returncode == 0
-            if gpu_available:
-                print("🚀 GPU detected - will use GPU acceleration for training!")
-            else:
-                print("💻 No GPU detected - using CPU (consider using GPU for 10-50x speedup)")
-            return gpu_available
-        except:
+            has_nvidia_gpu = result.returncode == 0
+
+            if not has_nvidia_gpu:
+                print("💻 No GPU detected - using CPU")
+                return False
+
+            # Check if XGBoost supports GPU
+            try:
+                # Try to create a dummy XGBoost model with GPU support
+                import xgboost as xgb
+                test_model = xgb.XGBRegressor(tree_method='gpu_hist', device='cuda', n_estimators=1)
+                # If we can create it, GPU is supported
+                print("🚀 GPU detected and XGBoost GPU support enabled - will use GPU acceleration!")
+                return True
+            except Exception as e:
+                print(f"⚠️  GPU detected but XGBoost doesn't support GPU (not compiled with CUDA)")
+                print(f"   Install GPU-enabled XGBoost: pip install xgboost[gpu]")
+                print("💻 Falling back to CPU mode")
+                return False
+
+        except Exception as e:
             print("💻 No GPU detected - using CPU")
             return False
 
