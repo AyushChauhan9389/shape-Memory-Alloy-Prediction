@@ -14,12 +14,10 @@ python fixed_mlp_model.py  # ✓ RECOMMENDED - Actually works!
 
 | Model | R² Score | MAE | Status |
 |-------|----------|-----|--------|
-| **Fixed MLP** | **TBD** | **TBD** | ✅ **USE THIS** |
+| **Fixed MLP** | **0.7560** | **28.49°C** | ✅ **USE THIS (+32.7% vs baseline)** |
 | Baseline MLP | 0.5696 | 52.90°C | ⚠️ Below target but works |
 | "Improved" MLP | -0.0329 | 77.10°C | ❌ **BROKEN - DO NOT USE** |
 | Target | 0.80-0.88 | 8-15°C | Goal |
-
-**Note**: Run `python fixed_mlp_model.py` to see actual performance.
 
 ## Installation
 
@@ -166,8 +164,9 @@ print(f"Predicted MF: {mf_pred:.2f}°C")
 | Scaler | StandardScaler | RobustScaler ❌ | StandardScaler ✅ |
 | Architecture | 128-64-32 | 256-128-64-32+BN | 128-64-32 ✅ |
 | Output | Multi (AF+MF) | Multi (AF+MF) | Separate models ✅ |
-| R² Score | 0.57 | -0.03 ❌ | **TBD** |
-| MAE | 52.90°C | 77.10°C ❌ | **TBD** |
+| R² Score | 0.57 | -0.03 ❌ | **0.76** ✅ |
+| MAE | 52.90°C | 77.10°C ❌ | **28.49°C** ✅ |
+| vs Baseline | - | -106% worse ❌ | **+32.7% better** ✅ |
 
 ## Troubleshooting
 
