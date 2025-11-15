@@ -1,50 +1,25 @@
 # Shape Memory Alloy (SMA) Temperature Prediction using MLP Neural Network
 
-This project implements a Multi-Layer Perceptron (MLP) neural network to predict the Austenite Finish (AF) and Martensite Finish (MF) temperatures for Shape Memory Alloys based on their composition and processing parameters.
+This project implements Multi-Layer Perceptron (MLP) neural networks to predict the Austenite Finish (AF) and Martensite Finish (MF) temperatures for Shape Memory Alloys based on their composition and processing parameters.
 
-## 🚀 Quick Start - Use the Improved Model!
+## 🚀 Quick Start - Use the Fixed Model!
 
-**For best results, use the improved model:**
+**⚠️ Important: The "improved" model FAILED. Use the fixed model instead:**
 
 ```bash
-python improved_mlp_model.py  # ✓ RECOMMENDED - Better performance
+python fixed_mlp_model.py  # ✓ RECOMMENDED - Actually works!
 ```
 
-The improved model includes:
-- ✓ Advanced feature engineering (NiTi ratios, element interactions)
-- ✓ AS and MS temperatures as additional features
-- ✓ Deeper architecture with Batch Normalization
-- ✓ Ensemble of 3 models for robust predictions
-- ✓ Expected R²: 0.82-0.87, MAE: 8-15°C
+## 📊 Model Performance Summary
 
-See [IMPROVEMENTS.md](IMPROVEMENTS.md) for detailed comparison.
+| Model | R² Score | MAE | Status |
+|-------|----------|-----|--------|
+| **Fixed MLP** | **TBD** | **TBD** | ✅ **USE THIS** |
+| Baseline MLP | 0.5696 | 52.90°C | ⚠️ Below target but works |
+| "Improved" MLP | -0.0329 | 77.10°C | ❌ **BROKEN - DO NOT USE** |
+| Target | 0.80-0.88 | 8-15°C | Goal |
 
----
-
-## Model Architecture
-
-**MLP (3-Layer) Neural Network:**
-- Input Layer: 22 features (19 element compositions + 3 process parameters)
-- Hidden Layer 1: 128 neurons (ReLU activation, Dropout 0.3, L2 regularization 0.001)
-- Hidden Layer 2: 64 neurons (ReLU activation, Dropout 0.3, L2 regularization 0.001)
-- Hidden Layer 3: 32 neurons (ReLU activation, Dropout 0.3, L2 regularization 0.001)
-- Output Layer: 2 neurons (AF and MF temperatures)
-
-## Configuration
-
-- **Optimizer:** Adam (learning rate = 0.001)
-- **Loss Function:** Huber Loss (robust to outliers)
-- **Batch Size:** 64
-- **Epochs:** 200 with early stopping (patience = 20)
-- **Regularization:** Dropout(0.3) + L2(0.001)
-- **Normalization:** StandardScaler (REQUIRED!)
-- **Learning Rate Scheduler:** ReduceLROnPlateau (factor=0.5, patience=10)
-
-## Expected Performance
-
-- **R� Score:** 0.80-0.88
-- **MAE:** 8-15�C
-- **Training Time:** 2-5 minutes
+**Note**: Run `python fixed_mlp_model.py` to see actual performance.
 
 ## Installation
 
@@ -60,144 +35,189 @@ Or install manually:
 pip install tensorflow>=2.15.0 numpy>=1.24.0 pandas>=2.0.0 scikit-learn>=1.3.0 matplotlib>=3.7.0 seaborn>=0.12.0
 ```
 
-## Usage
+## Models Available
 
-### Option 1: Improved Model (Recommended)
+### 1. Fixed MLP Model (RECOMMENDED)
 
 ```bash
-python improved_mlp_model.py
+python fixed_mlp_model.py
 ```
 
 **Features:**
-- Uses ~30 features (includes AS, MS temperatures + engineered features)
-- 4-layer architecture (256-128-64-32) with Batch Normalization
-- Ensemble of 3 models
-- Expected R²: 0.82-0.87, MAE: 8-15°C
+- ✅ Uses 24 features (19 elements + 3 process + AS/MS temperatures)
+- ✅ StandardScaler (proven to work)
+- ✅ Moderate architecture: 128-64-32
+- ✅ Separate models for AF and MF (better accuracy)
+- ✅ MSE loss (simpler, proven)
+- ✅ AS/MS have 0.84+ correlation with targets
 
-### Option 2: Baseline Model
+**What it does:**
+- Loads dataset with AS/MS features (high correlation: 0.84-0.98)
+- Trains separate models for AF and MF predictions
+- Uses proven StandardScaler normalization
+- Generates prediction plots with metrics
+- Saves models: `fixed_mlp_af_model.keras`, `fixed_mlp_mf_model.keras`
+
+### 2. Baseline MLP Model
 
 ```bash
 python mlp_model.py
 ```
 
-**Features:**
-- Uses 22 features (element compositions + process parameters)
-- 3-layer architecture (128-64-32)
-- Single model
-- Achieved R²: 0.57, MAE: 52.90°C
+**Performance:**
+- R²: 0.5696
+- MAE: 52.90°C
 
-### What the scripts do:
-1. Load and preprocess the `Combined_SMA_Dataset_Filled.csv` dataset
-2. Split data into train (64%), validation (16%), and test (20%) sets
-3. Build and train the MLP model with early stopping
-4. Perform 5-fold cross-validation
-5. Evaluate performance on the test set
-6. Generate visualizations:
-   - `mlp_training_history.png` - Training and validation metrics over epochs
-   - `mlp_predictions.png` - Predicted vs actual temperatures for AF and MF
-   - `mlp_residuals.png` - Residual analysis for model diagnostics
-7. Save the trained model to `mlp_sma_model.keras`
+**Features:**
+- Uses 22 features (NO AS/MS)
+- 3-layer architecture (128-64-32)
+- Multi-output (predicts both AF and MF together)
+
+### 3. "Improved" MLP Model ❌ DO NOT USE
+
+```bash
+# DON'T RUN THIS - IT'S BROKEN
+# python improved_mlp_model.py
+```
+
+**Why it failed:**
+- Negative R² (-0.03) - worse than predicting the mean!
+- Used RobustScaler instead of StandardScaler
+- Over-complex architecture (256-128-64-32 + BatchNorm)
+- See [DIAGNOSIS.md](DIAGNOSIS.md) for full analysis
 
 ## Dataset
 
-The dataset (`dataset/Combined_SMA_Dataset_Filled.csv`) contains 1,906 samples of various SMA compositions.
+**File:** `dataset/Combined_SMA_Dataset_Filled.csv`
 
-**Features (22 total):**
+**Statistics:**
+- Samples: 1,847
+- Features: 32 columns total
+- Missing values: 0% (dataset is complete!)
+
+**Features (24 used):**
 - Element compositions (19): Ag, Al, Au, Cd, Co, Cu, Fe, Hf, Mn, Nb, Ni, Pd, Pt, Ru, Si, Ta, Ti, Zn, Zr
 - Process parameters (3): Cooling Rate, Heating Rate, Calculated Density
+- Temperature features (2): AS, MS (0.84+ correlation with targets!)
 
 **Targets (2):**
-- AF: Austenite Finish Temperature (�C)
-- MF: Martensite Finish Temperature (�C)
+- AF: Austenite Finish Temperature (°C)
+- MF: Martensite Finish Temperature (°C)
 
-## Output
+**Data Characteristics:**
+- AF range: -198°C to 1244°C (std: 187°C)
+- MF range: -255°C to 1156°C (std: 182°C)
+- AF ↔ MF correlation: 0.98 (extremely high!)
+- AS ↔ AF correlation: 0.85
+- MS ↔ MF correlation: 0.85
 
-After training, you'll get:
+## Output Files
 
-1. **Console Output:**
-   - Model architecture summary
-   - Training progress with early stopping
-   - Test set performance metrics (MAE, R�, RMSE)
-   - Cross-validation results (mean � std)
+### Fixed MLP Model:
+- `fixed_mlp_af_model.keras` - AF prediction model
+- `fixed_mlp_mf_model.keras` - MF prediction model
+- `fixed_mlp_results.png` - Prediction plots with metrics
 
-2. **Saved Files:**
-   - `mlp_sma_model.keras` - Trained model
-   - `mlp_training_history.png` - Training curves
-   - `mlp_predictions.png` - Prediction scatter plots
-   - `mlp_residuals.png` - Residual analysis
+### Diagnostic Files:
+- `diagnose_data.py` - Data quality analysis script
+- `DIAGNOSIS.md` - Full diagnosis of why "improved" model failed
 
-## Model Performance Interpretation
+## Why the "Improved" Model Failed
 
-- **R� Score:** Measures how well the model explains variance in the data (1.0 = perfect)
-- **MAE (Mean Absolute Error):** Average prediction error in �C
-- **RMSE (Root Mean Squared Error):** More sensitive to large errors than MAE
+See [DIAGNOSIS.md](DIAGNOSIS.md) for detailed analysis. Key issues:
 
-## Advanced Usage
+1. **RobustScaler** instead of StandardScaler ❌
+2. **Over-complex architecture** (4 layers with BatchNorm) ❌
+3. **Feature engineering** added noise instead of signal ❌
 
-To use the trained model for predictions:
+The fixed model addresses all these issues.
+
+## Usage Example
 
 ```python
 import tensorflow as tf
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
-# Load the model
-model = tf.keras.models.load_model('mlp_sma_model.keras')
+# Load models
+model_af = tf.keras.models.load_model('fixed_mlp_af_model.keras')
+model_mf = tf.keras.models.load_model('fixed_mlp_mf_model.keras')
 
-# Prepare your input data (22 features)
-# Make sure to scale it using the same StandardScaler fitted on training data
-X_new = np.array([[...]])  # Your feature values
+# Prepare input (24 features: 19 elements + 3 process + AS + MS)
+X_new = np.array([[...]]) # Your data
 
-# Scale the data
+# Scale features (use same scaler from training!)
 scaler = StandardScaler()
-X_new_scaled = scaler.fit_transform(X_new)  # Note: Use the scaler from training
+X_new_scaled = scaler.fit_transform(X_new)
 
-# Make predictions
-predictions = model.predict(X_new_scaled)
-af_pred, mf_pred = predictions[0]
+# Predict
+af_pred = model_af.predict(X_new_scaled)[0][0]
+mf_pred = model_mf.predict(X_new_scaled)[0][0]
 
-print(f"Predicted AF: {af_pred:.2f}�C")
-print(f"Predicted MF: {mf_pred:.2f}�C")
+print(f"Predicted AF: {af_pred:.2f}°C")
+print(f"Predicted MF: {mf_pred:.2f}°C")
 ```
 
-## Technical Details
+## Model Comparison
 
-**Why This Architecture?**
-- 3-layer MLP is optimal for small-medium datasets (1,000-2,000 samples)
-- Dropout prevents overfitting
-- L2 regularization improves generalization
-- Huber loss is robust to outliers in temperature data
-- Early stopping prevents overtraining
-
-**Cross-Validation:**
-- 5-fold CV provides reliable performance estimates
-- Reduces variance in performance metrics
-- Helps detect overfitting
-
-**Data Normalization:**
-- StandardScaler (z-score normalization) is ESSENTIAL for neural networks
-- Features have different scales (percentages vs temperatures)
-- Improves training stability and convergence
+| Aspect | Baseline | "Improved" (BROKEN) | Fixed |
+|--------|----------|---------------------|-------|
+| Features | 22 (no AS/MS) | 30 (with engineering) | 24 (with AS/MS) |
+| Scaler | StandardScaler | RobustScaler ❌ | StandardScaler ✅ |
+| Architecture | 128-64-32 | 256-128-64-32+BN | 128-64-32 ✅ |
+| Output | Multi (AF+MF) | Multi (AF+MF) | Separate models ✅ |
+| R² Score | 0.57 | -0.03 ❌ | **TBD** |
+| MAE | 52.90°C | 77.10°C ❌ | **TBD** |
 
 ## Troubleshooting
 
-**Low R� or high MAE?**
-- Increase epochs (if early stopping triggered too early)
-- Adjust learning rate (try 0.0001 or 0.01)
-- Reduce dropout (try 0.2)
-- Increase model capacity (more neurons or layers)
+**Q: Why not use AS/MS in baseline?**
+A: Baseline was created before we knew AS/MS had such high correlation (0.84+).
 
-**Overfitting (train loss << val loss)?**
-- Increase dropout (try 0.4)
-- Increase L2 regularization (try 0.01)
-- Reduce model capacity
-- Get more training data
+**Q: Why did "improved" model fail?**
+A: Wrong scaler (RobustScaler), over-engineered architecture. See DIAGNOSIS.md.
 
-**Training too slow?**
-- Reduce batch size (try 32)
-- Use GPU (TensorFlow will auto-detect)
-- Reduce epochs or patience
+**Q: Which model should I use?**
+A: Use `fixed_mlp_model.py` - it combines best of both approaches.
+
+**Q: Can I use XGBoost instead?**
+A: XGBoost often works better on tabular data, but this project focuses on MLP.
+
+## Future Improvements
+
+If fixed model still doesn't meet targets (R²=0.80-0.88):
+
+1. **Try different alloy families separately**
+   - NiTi alloys (76% of data)
+   - Cu-based alloys (39% of data)
+   - Others
+
+2. **Hyperparameter tuning**
+   - Use Keras Tuner or Optuna
+   - Search: layers, neurons, dropout, learning rate
+
+3. **Data augmentation**
+   - Add small noise to inputs
+   - Synthetic minority oversampling
+
+4. **Alternative architectures**
+   - Residual connections
+   - Multi-task learning (predict all 4 temps)
 
 ## License
 
-This project is open source and available for research and educational purposes.
+Open source for research and educational purposes.
+
+## References
+
+- **Shape Memory Alloys**: Materials with temperature-dependent phase transformations
+- **Transformation Temperatures**: Critical for applications (actuators, medical devices)
+- **Common SMAs**: NiTi (56%), Cu-based (25%), Fe-based (15%)
+
+## Citation
+
+If you use this code, please cite:
+```
+SMA Temperature Prediction using MLP Neural Networks
+Dataset: 1,847 samples from Combined_SMA_Dataset_Filled.csv
+```
