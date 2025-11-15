@@ -5,7 +5,7 @@ Predicts Austenite Finish (AF) and Martensite Finish (MF) temperatures
 
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import xgboost as xgb
@@ -34,6 +34,22 @@ class SMAXGBoostModel:
         self.use_tuning = use_tuning
         self.best_params_af = None
         self.best_params_mf = None
+        self.use_gpu = self._check_gpu_available()
+
+    def _check_gpu_available(self):
+        """Check if GPU is available for XGBoost"""
+        try:
+            import subprocess
+            result = subprocess.run(['nvidia-smi'], capture_output=True, text=True, timeout=2)
+            gpu_available = result.returncode == 0
+            if gpu_available:
+                print("🚀 GPU detected - will use GPU acceleration for training!")
+            else:
+                print("💻 No GPU detected - using CPU (consider using GPU for 10-50x speedup)")
+            return gpu_available
+        except:
+            print("💻 No GPU detected - using CPU")
+            return False
 
     def load_data(self, filepath):
         """Load and prepare the SMA dataset"""
@@ -133,9 +149,18 @@ class SMAXGBoostModel:
         # Improved base parameters - REDUCED OVERFITTING
         base_params = {
             'random_state': 42,
-            'n_jobs': -1,
             'eval_metric': 'rmse'
         }
+
+        # Add GPU support if available
+        if self.use_gpu:
+            base_params['tree_method'] = 'gpu_hist'
+            base_params['device'] = 'cuda'
+            print("⚡ Using GPU acceleration (tree_method='gpu_hist')")
+        else:
+            base_params['n_jobs'] = -1
+            base_params['tree_method'] = 'hist'  # Fast CPU method
+            print("⚙️  Using CPU with fast histogram method")
 
         # Better default parameters to reduce overfitting
         improved_params = {
@@ -175,16 +200,22 @@ class SMAXGBoostModel:
         print("-"*60)
 
         if self.use_tuning:
-            print("⚙️  Running GridSearchCV for hyperparameter tuning...")
-            print(f"   Testing {3*3*3*3*3*3*3*3*3} parameter combinations with 3-fold CV")
+            # Use RandomizedSearchCV for faster tuning (especially on CPU)
+            # Tests 100 random combinations instead of all 19,683
+            n_iter = 100 if not self.use_gpu else 200  # More iterations on GPU
+            print(f"⚙️  Running RandomizedSearchCV for hyperparameter tuning...")
+            print(f"   Testing {n_iter} random parameter combinations with 3-fold CV")
+            print(f"   (Much faster than GridSearch's {3*3*3*3*3*3*3*3*3} combinations)")
 
-            grid_search_af = GridSearchCV(
+            grid_search_af = RandomizedSearchCV(
                 estimator=xgb.XGBRegressor(**base_params),
-                param_grid=param_grid,
+                param_distributions=param_grid,
+                n_iter=n_iter,
                 cv=3,
                 scoring='r2',
-                n_jobs=-1,
-                verbose=1
+                n_jobs=-1 if not self.use_gpu else 1,
+                verbose=1,
+                random_state=42
             )
 
             with tqdm(total=100, desc="GridSearch AF", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
@@ -242,16 +273,20 @@ class SMAXGBoostModel:
         print("-"*60)
 
         if self.use_tuning:
-            print("⚙️  Running GridSearchCV for hyperparameter tuning...")
-            print(f"   Testing {3*3*3*3*3*3*3*3*3} parameter combinations with 3-fold CV")
+            n_iter = 100 if not self.use_gpu else 200
+            print(f"⚙️  Running RandomizedSearchCV for hyperparameter tuning...")
+            print(f"   Testing {n_iter} random parameter combinations with 3-fold CV")
+            print(f"   (Much faster than GridSearch's {3*3*3*3*3*3*3*3*3} combinations)")
 
-            grid_search_mf = GridSearchCV(
+            grid_search_mf = RandomizedSearchCV(
                 estimator=xgb.XGBRegressor(**base_params),
-                param_grid=param_grid,
+                param_distributions=param_grid,
+                n_iter=n_iter,
                 cv=3,
                 scoring='r2',
-                n_jobs=-1,
-                verbose=1
+                n_jobs=-1 if not self.use_gpu else 1,
+                verbose=1,
+                random_state=42
             )
 
             with tqdm(total=100, desc="GridSearch MF", bar_format='{l_bar}{bar}| {n_fmt}%') as pbar:
